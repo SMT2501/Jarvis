@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+memory.sqlite3*
+context/
+.auth/
+
+.react-runtime/

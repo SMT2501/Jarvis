@@ -1,0 +1,13 @@
+# Agent team use and verification
+
+12 October 2026. The existing old CRM clone was found and inspected at legacy/virtuo-ai-os, origin https://github.com/SMT2501/virtuo-ai-os.git, HEAD 677b7b4. Reused existing clone instead of duplicating it. No source history rewritten or remote database changed.
+
+Open Agents > Run income workflow. JARVIS hands a public brief to Research, which uses account web search and gathers source URLs; Lead checks citation links, duplicates and contact-page domains; Sales drafts short messages. Up to four candidates and two AI requests per batch. Results persist in agent jobs, opportunities and the local pipeline as pending review. Drafts cannot be sent by this workflow. Cancel stops further handoffs; interruption/failure states remain visible. Model/account limits apply. Console accepts `/income <public research brief>` to start the same workflow. This is a bounded staged workflow, not unrestricted autonomous CRM management.
+
+Core/Research/Lead/Sales are implemented for this workflow. Client/Development/Finance/Marketing/Personal/Project cards are explicit future capabilities, not working external integrations. The daily local briefing remains implemented separately. Metrics count recent jobs; they do not claim income or sales conversion.
+
+Tests: seven specialist tests passed (cited evidence, duplicate skips, complete handoff, failure/cancellation, interrupted recovery, invalid JSON and draft-ID rejection; some grouped). Six connection tests and five desktop tests passed. Native desktop smoke test passed with nine pages and usable Console layout. Legacy interchange checks passed: workspace UUID required, role/task-status mapping, lead status kept new, no sending, no conflation of source-coverage score with old CRM buying score.
+
+Live verification: first test was blocked by the previous process/session lock. Following user confirmation to quit, the exact previously launched process was stopped. Initial streaming source collector missed incremental output items; corrected it to consume completed items and annotation events. A fresh public documentation query completed with web tool activity and 16 source URLs. No private profile sent. This proves tool availability, not lead quality or commercial outcomes. Full real prospect-to-draft pipeline has not yet been validated with real businesses.
+
+Integration adapter: legacy_bridge.py prepares versioned local CRM interchange records for an explicitly selected workspace; it does not write to Supabase or claim the approval schema is mapped. Old React UI <> local runtime connection, authenticated import, Google delivery, tenant-isolation verification and commercial readiness remain pending. See AGENTIC_CRM_BRIEF.md.

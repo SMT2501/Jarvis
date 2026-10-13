@@ -1,0 +1,5 @@
+# Agent team brief
+
+12 October 2026. Implement JARVIS coordinator and an actual Research > Lead Qualification > Sales Draft workflow. Share durable jobs, cited opportunities and draft handoffs through SQLite. User owns sending decisions. Ten role cards: Core, Research, Lead, Sales working; other six marked not connected until tool workflows exist.
+Acceptance: bounded public web research using connected account; no invented research evidence when tool absent; qualifying candidates require linked sources returned by research tools; local prospects and drafts persisted for review; progress/cancellation/failure visible; zero outbound send capability; interrupted jobs do not auto-run on restart; truthful completed/failed metrics, no NaN or fake autonomy scores.
+Routine choice: sequential agents on small computer, one bounded batch up to four candidates, maximum two model calls. Research uses public task text only, not private account documents. Existing morning briefing remains local until explicitly upgraded. Website delivery checklist not applicable.
