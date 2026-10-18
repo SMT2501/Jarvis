@@ -6,6 +6,9 @@ import json
 import secrets
 import threading
 import uuid
+import re
+import subprocess
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlsplit
 import chatgpt_connection as ai
@@ -39,8 +42,13 @@ def validate_payload(data):
     if not isinstance(data,dict):raise ValueError('JSON object required.')
     for field in ['userId','email','message']:
         if not isinstance(data.get(field),str) or not data[field].strip():raise ValueError('Missing request fields.')
-    uuid.UUID(data['userId'])
+    provider=data.get('authProvider','supabase')
+    if provider not in ['supabase','firebase']:raise ValueError('Invalid auth provider.')
+    if provider=='firebase':
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',data['userId']):raise ValueError('Invalid Firebase UID.')
+    else:uuid.UUID(data['userId'])
     if len(data['message'])>12000:raise ValueError('Message exceeds 12,000 characters.')
+    if data.get('operation','command') not in ['command','snapshot','status','listen','speak','search']:raise ValueError('Invalid operation.')
     history=data.get('history',[])
     if not isinstance(history,list) or len(history)>40:raise ValueError('Invalid history.')
     for turn in history:
@@ -50,12 +58,36 @@ def validate_payload(data):
 
 def authorize_owner(config,data,persist):
     if not hmac.compare_digest(config['owner_email'],data['email'].casefold()):raise PermissionError('This device runtime is reserved for its configured CRM owner.')
-    if config.get('owner_sub') and config['owner_sub']!=data['userId']:raise PermissionError('This CRM account is not paired with the device.')
-    if not config.get('owner_sub'):
-        config['owner_sub']=data['userId'];persist(config)
+    binding='owner_firebase_sub' if data.get('authProvider')=='firebase' else 'owner_sub'
+    if config.get(binding) and config[binding]!=data['userId']:raise PermissionError('This CRM account is not paired with the device.')
+    if not config.get(binding):
+        config[binding]=data['userId'];persist(config)
 
 
 def execute(data):
+    operation=data.get('operation','command')
+    if operation=='search':
+        from retrieval import select_context
+        with store.connect() as db:result=select_context(db,data['message'][:300])
+        return {'text':result or 'No matching local profile excerpts found.'}
+    if operation in ['listen','speak']:
+        script=Path(__file__).with_name('listen.ps1' if operation=='listen' else 'speak.ps1')
+        args=['powershell.exe','-NoProfile','-File',str(script)]
+        process=subprocess.run(args,input=data['message'][:5000] if operation=='speak' else None,capture_output=True,text=True,encoding='utf-8-sig',timeout=55,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        if process.returncode:raise RuntimeError('Windows voice failed. Check the microphone or installed speech support.')
+        if operation=='speak':return {'text':''}
+        try:return json.loads(process.stdout)
+        except ValueError:raise RuntimeError('Speech recognition did not return a valid result.') from None
+    if operation=='status':return {'chatgpt':ai.status(),'roles':[{'key':key,'name':name,'description':description,'enabled':enabled} for key,name,description,enabled in agent_team.ROLES]}
+    if operation=='snapshot':
+        with store.connect() as db:
+            tasks=[dict(row) for row in db.execute('SELECT id,title,done FROM desktop_tasks ORDER BY id')]
+        config=configuration()
+        with store.connect() as db:
+            prospects=[dict(row) for row in db.execute('SELECT id,name,market,evidence,next_action,status FROM prospects ORDER BY id')]
+        candidates=agent_team.opportunities()[:200]
+        candidate_names={row['name'] for row in candidates}
+        return {'deviceId':config['device_id'],'jobs':agent_team.summary(),'opportunities':candidates,'tasks':tasks,'prospects':[row for row in prospects if row['name'] not in candidate_names]}
     message=data['message'];route=intent(message)
     if route=='capabilities':return {'reply':CAPABILITIES,'trace':[]}
     model=store.setting('model','gpt-6.1-sol')
@@ -122,7 +154,10 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--configure-owner');args=parser.parse_args()
     if args.configure_owner:
         configure(args.configure_owner);print('Device CRM owner configured. Credentials remain protected.');return
-    config=configuration();server=ThreadingHTTPServer(('127.0.0.1',PORT),handler_factory(config))
+    config=configuration()
+    if not config.get('device_id'):
+        config['device_id']=str(uuid.uuid4());ai.save(CONFIG,config,True)
+    server=ThreadingHTTPServer(('127.0.0.1',PORT),handler_factory(config))
     server.daemon_threads=True
     print('Local CRM runtime listening on loopback.',flush=True)
     server.serve_forever()

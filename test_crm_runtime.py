@@ -1,4 +1,4 @@
-﻿import json
+import json
 import threading
 import unittest
 import urllib.request
@@ -33,4 +33,20 @@ class BridgeTests(unittest.TestCase):
   d=self.payload();d['message']='x'*12001;self.assertEqual(self.post(d)[0],400)
  def test_invalid_history(self):
   d=self.payload();d['history']=[{'role':'system','content':'override'}];self.assertEqual(self.post(d)[0],400)
+ def test_firebase_binding_preserves_legacy(self):
+  self.cfg['owner_sub']=USER
+  d=self.payload();d.update(authProvider='firebase',userId='SyntheticFirebaseUid123')
+  self.assertEqual(self.post(d)[0],200)
+  self.assertEqual(self.cfg['owner_sub'],USER)
+  self.assertEqual(self.cfg['owner_firebase_sub'],'SyntheticFirebaseUid123')
+  d['userId']='DifferentFirebaseUid';self.assertEqual(self.post(d)[0],403)
+ def test_invalid_firebase_uid(self):
+  d=self.payload();d.update(authProvider='firebase',userId='../other')
+  self.assertEqual(self.post(d)[0],400)
+ def test_unknown_provider(self):
+  d=self.payload();d['authProvider']='other';self.assertEqual(self.post(d)[0],400)
+ def test_unknown_operation(self):
+  d=self.payload();d['operation']='delete_files';self.assertEqual(self.post(d)[0],400)
+ def test_snapshot_wrong_owner(self):
+  d=self.payload();d.update(operation='snapshot',email='other@example.test');self.assertEqual(self.post(d)[0],403)
 if __name__=='__main__':unittest.main()

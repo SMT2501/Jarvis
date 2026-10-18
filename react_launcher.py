@@ -57,6 +57,18 @@ def ensure_runtime():
             time.sleep(1)
     return config["token"]
 
+def production_entry():
+    manifest=REPO/'.output'/'nitro.json'
+    entry=REPO/'.output'/'server'/'index.mjs'
+    if not manifest.is_file() or not entry.is_file():return None
+    try:
+        if json.loads(manifest.read_text(encoding='utf-8')).get('preset')!='node-server':return None
+    except (ValueError,OSError):return None
+    sources=[p for p in (REPO/'src').rglob('*') if p.suffix in ['.ts','.tsx','.css']]
+    sources += [REPO/name for name in ['package.json','package-lock.json','vite.config.ts'] if (REPO/name).is_file()]
+    if any(p.stat().st_mtime>manifest.stat().st_mtime for p in sources):return None
+    return entry
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--startup',action='store_true');parser.add_argument('--check',action='store_true');parser.add_argument('--serve-only',action='store_true');args=parser.parse_args()
     if args.check:
@@ -66,7 +78,10 @@ def main():
         vite=REPO/'node_modules'/'vite'/'bin'/'vite.js'
         if not NODE.is_file() or not vite.is_file():raise RuntimeError('React CRM dependencies are missing. See REACT_INTERFACE_README.md.')
         RUNTIME.mkdir(exist_ok=True)
+        entry=production_entry()
+        launch=[str(NODE),str(entry)] if entry else [str(NODE),str(vite),'--host','127.0.0.1','--port','5178','--strictPort']
         env=os.environ.copy()
+        env.update({'NITRO_HOST':'127.0.0.1','HOST':'127.0.0.1','NITRO_PORT':'5178','PORT':'5178'})
         env["JARVIS_LOCAL_RUNTIME_URL"]="http://127.0.0.1:5179"
         env["JARVIS_LOCAL_RUNTIME_TOKEN"]=runtime_token
         config=REPO/'.env'
@@ -76,8 +91,8 @@ def main():
                 key,value=line.split('=',1);key=key.strip();value=value.strip()
                 if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',key):env[key]=value.strip(chr(34)+chr(39))
         with (RUNTIME/'server.log').open('ab') as output:
-            process=subprocess.Popen([str(NODE),str(vite),'--host','127.0.0.1','--port','5178','--strictPort'],cwd=REPO,env=env,stdout=output,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        (RUNTIME/'server.json').write_text(json.dumps({'pid':process.pid,'url':URL,'repository':str(REPO)}),encoding='utf-8')
+            process=subprocess.Popen(launch,cwd=REPO,env=env,stdout=output,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        (RUNTIME/'server.json').write_text(json.dumps({'pid':process.pid,'url':URL,'repository':str(REPO),'mode':'production' if entry else 'development'}),encoding='utf-8')
         deadline=time.monotonic()+240
         while not ready():
             if process.poll() is not None:raise RuntimeError('React CRM server exited. See .react-runtime/server.log.')

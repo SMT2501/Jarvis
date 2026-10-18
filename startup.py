@@ -5,12 +5,12 @@ import winreg
 
 BASE=Path(__file__).resolve().parent
 RUN=r'Software\Microsoft\Windows\CurrentVersion\Run'
-NAME='JarvisLocal'
+NAME='JarvisCRM'
 
 def command():
     pythonw=Path(sys.executable).with_name('pythonw.exe')
     if not pythonw.is_file(): raise RuntimeError('Windowed Python runtime unavailable.')
-    return f'"{pythonw}" "{BASE / "desktop.py"}" --minimized'
+    return f'"{pythonw}" "{BASE / "react_launcher.py"}" --startup'
 
 def enabled():
     try:
